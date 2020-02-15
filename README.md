@@ -72,8 +72,8 @@ export const noHMR = true;
 ### Root components
 The way we implement HMR with on-the-fly generated proxy modules means in order to pick
 up the new module exports, you need to access them through the imported names. When we
-redraw in Mithril it will call render on the top level component, and as it references
-subcomponents they will be updated references. However, because the root component is not
+redraw in Mithril it will render the top level component, and as it references
+subcomponents they will resolve to the updated references. However, because the root component is not
 re-evaluated, it will not update with changes unless you wrap it in a callback so it
 gets evaluated again.
 
