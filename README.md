@@ -57,7 +57,7 @@ You can also specify a different path to serve or a different port. See `hotweb 
 The hotweb server is just a little command line tool wrapping the hotweb package,
 which you can use directly in Go to customize or integrate hotweb with your tooling.
 
-[GoDocs](https://pkg.go.dev/github.com/progrium/hotweb/pkg/hotweb)
+[GoDocs](https://godoc.org/github.com/progrium/hotweb/pkg/hotweb)
 
 ## Notes
 
