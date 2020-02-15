@@ -1,0 +1,21 @@
+@import url(https://fonts.googleapis.com/css?family=Righteous|Shadows+Into+Light&display=swap);
+@import url(https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css);
+
+@import "/style/hero.css";
+
+#logo {
+    font-family: 'Righteous';
+    font-size: 50px;
+    color: white;
+}
+
+#new-standard {
+    background-color: white;
+    padding: 0px 10px 0px 10px;
+    color: black;
+    font-family: 'Shadows Into Light';
+}
+
+footer.footer {
+    
+}

@@ -1,0 +1,73 @@
+export const NavBar = {
+    view: function(vnode) {
+        return m("nav.navbar",
+            m("div.container",
+                [
+                    m("div.navbar-brand",
+                        [
+                            m("a.navbar-item[id='logo'][href='https://github.com/progrium/hotweb']",
+                                " HOTWEB "
+                            ),
+                            m("span.navbar-burger.burger[data-target='navbarMenu']",
+                                [
+                                    m("span"),
+                                    m("span"),
+                                    m("span")
+                                ]
+                            )
+                        ]
+                    ),
+                    m(".navbar-menu[id='navbarMenu']",
+                        m("div.navbar-end",
+                            m("div.tabs.is-right",
+                                [
+                                    m("ul",
+                                        [
+                                            m("li.is-active",
+                                                m("a",
+                                                    "Home"
+                                                )
+                                            ),
+                                            m("li",
+                                                m("a[href='']",
+                                                    "Examples"
+                                                )
+                                            ),
+                                            m("li",
+                                                m("a[href='']",
+                                                    "Features"
+                                                )
+                                            ),
+                                            m("li",
+                                                m("a[href='']",
+                                                    "Team"
+                                                )
+                                            ),
+                                            m("li",
+                                                m("a[href='']",
+                                                    "Help"
+                                                )
+                                            )
+                                        ]
+                                    ),
+                                    m("span.navbar-item",
+                                        m("a.button.is-white.is-outlined[href='https://github.com/progrium/hotweb/blob/master/_example']",
+                                            [
+                                                m("span.icon",
+                                                    m("i.fa.fa-github")
+                                                ),
+                                                m("span[title='Hello from the other side']",
+                                                    "View Source"
+                                                )
+                                            ]
+                                        )
+                                    )
+                                ]
+                            )
+                        )
+                    )
+                ]
+            )
+        )
+    }
+}
