@@ -66,7 +66,7 @@ You may experience weird bugs if you try to hot replace stateful modules. You ca
 mark a module to reload the whole page instead of trying to hot replace by exporting
 a field named `noHMR`. The type and value are ignored. Example:
 ```javascript
-export const noHTML = true;
+export const noHMR = true;
 ```
 
 ### Root components
