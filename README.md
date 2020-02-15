@@ -12,7 +12,7 @@ and without Webpack.**
 
 ## Getting hotweb
 ```
-$ go install github.com/progrium/hotweb/...
+$ go install github.com/progrium/hotweb/cmd/hotweb
 ```
 
 ## Quickstart with example
