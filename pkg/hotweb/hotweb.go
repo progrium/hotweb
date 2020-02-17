@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"text/template"
@@ -49,6 +50,10 @@ func newWriteWatcher(filepath string) (*watcher.Watcher, error) {
 
 func New(fileroot string, next http.Handler) *Middleware {
 	watcher, err := newWriteWatcher(fileroot)
+	if err != nil {
+		panic(err)
+	}
+	fileroot, err = filepath.Abs(fileroot)
 	if err != nil {
 		panic(err)
 	}
