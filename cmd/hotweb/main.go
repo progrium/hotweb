@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gorilla/handlers"
 	"github.com/progrium/hotweb/pkg/hotweb"
@@ -12,13 +13,15 @@ import (
 )
 
 var (
-	Port string
-	Dir  string
+	Port   string
+	Dir    string
+	Ignore string
 )
 
 func init() {
 	flag.StringVar(&Port, "port", "8080", "port to listen on")
 	flag.StringVar(&Dir, "dir", ".", "directory to serve")
+	flag.StringVar(&Ignore, "ignore", "", "directories to not proxy for, comma delimited")
 }
 
 func main() {
@@ -33,6 +36,7 @@ func main() {
 	}
 
 	hw := hotweb.New(Dir, nil)
+	hw.IgnoreDirs = strings.Split(Ignore, ",")
 
 	go func() {
 		log.Printf("watching %#v\n", Dir)

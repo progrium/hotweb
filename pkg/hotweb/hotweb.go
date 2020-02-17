@@ -30,6 +30,7 @@ func debug(args ...interface{}) {
 
 type Middleware struct {
 	Fileroot      string
+	IgnoreDirs    []string
 	WatchInterval time.Duration
 
 	Upgrader websocket.Upgrader
@@ -67,6 +68,7 @@ func New(fileroot string, next http.Handler) *Middleware {
 }
 
 func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// TODO: some way to make sure this is hotweb websocket
 	if websocket.IsWebSocketUpgrade(r) {
 		conn, err := m.Upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -82,12 +84,21 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isJavaScript(r) && !underscoreFilePrefix(r) && r.URL.RawQuery == "" {
+	if !m.isIgnored(r) && isJavaScript(r) && !underscoreFilePrefix(r) && r.URL.RawQuery == "" {
 		m.handleModuleProxy(w, r)
 		return
 	}
 
 	m.next.ServeHTTP(w, r)
+}
+
+func (m *Middleware) isIgnored(r *http.Request) bool {
+	for _, path := range m.IgnoreDirs {
+		if path != "" && strings.HasPrefix(r.URL.Path, path) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Middleware) handleClientModule(w http.ResponseWriter, r *http.Request) {
