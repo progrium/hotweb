@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/progrium/hotweb/pkg/esbuild"
 	"github.com/progrium/hotweb/pkg/jsexports"
 	"github.com/radovskyb/watcher"
 )
@@ -89,12 +91,28 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !m.isIgnored(r) && isJavaScript(r) && !underscoreFilePrefix(r) && r.URL.RawQuery == "" {
+	if m.isValidJS(r) && m.jsxExists(r) && r.URL.RawQuery != "" {
+		m.handleBuildJsx(w, r)
+		return
+	}
+
+	if m.isValidJS(r) && r.URL.RawQuery == "" {
 		m.handleModuleProxy(w, r)
 		return
 	}
 
 	m.next.ServeHTTP(w, r)
+}
+
+func (m *Middleware) jsxExists(r *http.Request) bool {
+	if _, err := os.Stat(m.jsxPath(r)); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func (m *Middleware) isValidJS(r *http.Request) bool {
+	return !m.isIgnored(r) && isJavaScript(r) && !underscoreFilePrefix(r)
 }
 
 func (m *Middleware) isIgnored(r *http.Request) bool {
@@ -106,6 +124,20 @@ func (m *Middleware) isIgnored(r *http.Request) bool {
 	return false
 }
 
+func (m *Middleware) handleBuildJsx(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("content-type", "text/javascript")
+	b, err := esbuild.BuildFile(m.jsxPath(r))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func (m *Middleware) handleClientModule(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "text/javascript")
 	io.WriteString(w, ClientModule)
@@ -114,7 +146,12 @@ func (m *Middleware) handleClientModule(w http.ResponseWriter, r *http.Request) 
 func (m *Middleware) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.New("proxy").Parse(ModuleProxyTmpl))
 
-	exports, err := jsexports.Exports(path.Join(m.Fileroot, r.URL.Path))
+	filepath := path.Join(m.Fileroot, r.URL.Path)
+	if m.jsxExists(r) {
+		filepath += "x"
+	}
+
+	exports, err := jsexports.Exports(filepath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		debug(err)
@@ -169,8 +206,12 @@ func (m *Middleware) Watch() error {
 	return m.Watcher.Start(m.WatchInterval)
 }
 
+func (m *Middleware) jsxPath(r *http.Request) string {
+	return filepath.Clean(filepath.Join(m.Fileroot, r.URL.Path)) + "x" // TODO: dont cheat
+}
+
 func isJavaScript(r *http.Request) bool {
-	return contains([]string{".mjs", ".js"}, path.Ext(r.URL.Path))
+	return contains([]string{".mjs", ".js", ".jsx"}, path.Ext(r.URL.Path))
 }
 
 func underscoreFilePrefix(r *http.Request) bool {

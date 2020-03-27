@@ -10,6 +10,8 @@ When used with plain old JavaScript component frameworks like
 development **without a compile step, without Node.js or any node_modules,
 and without Webpack.**
 
+**NEW** Supports on-the-fly conversion of JSX, see `_example`
+
 ## Getting hotweb
 ```
 $ go install github.com/progrium/hotweb/cmd/hotweb

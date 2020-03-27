@@ -1,8 +1,8 @@
-import * as hero from "/lib/hero.mjs";
-import * as cta from "/lib/cta.mjs";
-import * as footer from "/lib/footer.mjs";
-import * as nav from "/lib/nav.mjs";
-import * as features from "/lib/features.mjs";
+import * as hero from "/lib/hero.js";
+import * as cta from "/lib/cta.js";
+import * as footer from "/lib/footer.js";
+import * as nav from "/lib/nav.js";
+import * as features from "/lib/features.js";
 
 export const Page = {
     view: function (vnode) {
