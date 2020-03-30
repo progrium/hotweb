@@ -1,12 +1,11 @@
 package hotweb
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"text/template"
@@ -15,7 +14,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/progrium/hotweb/pkg/esbuild"
 	"github.com/progrium/hotweb/pkg/jsexports"
+	"github.com/progrium/hotweb/pkg/makefs"
 	"github.com/radovskyb/watcher"
+	"github.com/spf13/afero"
 )
 
 const (
@@ -31,8 +32,9 @@ func debug(args ...interface{}) {
 	log.Println(args...)
 }
 
-type Middleware struct {
-	Fileroot      string
+type Handler struct {
+	Fs            afero.Fs
+	ServeRoot     string
 	IgnoreDirs    []string
 	WatchInterval time.Duration
 
@@ -40,7 +42,6 @@ type Middleware struct {
 	Watcher  *watcher.Watcher
 
 	clients sync.Map
-	next    http.Handler
 }
 
 func newWriteWatcher(filepath string) (*watcher.Watcher, error) {
@@ -50,31 +51,40 @@ func newWriteWatcher(filepath string) (*watcher.Watcher, error) {
 	return w, w.AddRecursive(filepath)
 }
 
-func New(fileroot string, next http.Handler) *Middleware {
-	watcher, err := newWriteWatcher(fileroot)
-	if err != nil {
-		panic(err)
+func New(fs afero.Fs, serveRoot string) *Handler {
+	cache := afero.NewMemMapFs()
+	mfs := makefs.New(fs, cache)
+
+	var watcher *watcher.Watcher
+	var err error
+	if mfs.Real() {
+		watcher, err = newWriteWatcher(serveRoot)
+		if err != nil {
+			panic(err)
+		}
 	}
-	fileroot, err = filepath.Abs(fileroot)
-	if err != nil {
-		panic(err)
-	}
-	if next == nil {
-		next = http.FileServer(http.Dir(fileroot))
-	}
-	return &Middleware{
-		Fileroot: fileroot,
+
+	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) error {
+		b, err := esbuild.BuildFile(fs, src)
+		if err != nil {
+			return err
+		}
+		return afero.WriteFile(fs, dst, b, 0644)
+	})
+
+	return &Handler{
+		Fs:        mfs,
+		ServeRoot: serveRoot,
 		Upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
 		Watcher:       watcher,
 		WatchInterval: DefaultWatchInterval,
-		next:          next,
 	}
 }
 
-func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (m *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: some way to make sure this is hotweb websocket
 	if websocket.IsWebSocketUpgrade(r) {
 		conn, err := m.Upgrader.Upgrade(w, r, nil)
@@ -91,31 +101,33 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if m.isValidJS(r) && m.jsxExists(r) && r.URL.RawQuery != "" {
-		m.handleBuildJsx(w, r)
-		return
-	}
+	// if m.isValidJS(r) && m.jsxExists(r) && r.URL.RawQuery != "" {
+	// 	m.handleBuildJsx(w, r)
+	// 	return
+	// }
 
 	if m.isValidJS(r) && r.URL.RawQuery == "" {
 		m.handleModuleProxy(w, r)
 		return
 	}
 
-	m.next.ServeHTTP(w, r)
+	httpFs := afero.NewHttpFs(m.Fs)
+	fileserver := http.FileServer(httpFs.Dir(m.ServeRoot))
+	fileserver.ServeHTTP(w, r)
 }
 
-func (m *Middleware) jsxExists(r *http.Request) bool {
-	if _, err := os.Stat(m.jsxPath(r)); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
+// func (m *Handler) jsxExists(r *http.Request) bool {
+// 	if _, err := os.Stat(m.jsxPath(r)); os.IsNotExist(err) {
+// 		return false
+// 	}
+// 	return true
+// }
 
-func (m *Middleware) isValidJS(r *http.Request) bool {
+func (m *Handler) isValidJS(r *http.Request) bool {
 	return !m.isIgnored(r) && isJavaScript(r) && !underscoreFilePrefix(r)
 }
 
-func (m *Middleware) isIgnored(r *http.Request) bool {
+func (m *Handler) isIgnored(r *http.Request) bool {
 	for _, path := range m.IgnoreDirs {
 		if path != "" && strings.HasPrefix(r.URL.Path, path) {
 			return true
@@ -124,34 +136,23 @@ func (m *Middleware) isIgnored(r *http.Request) bool {
 	return false
 }
 
-func (m *Middleware) handleBuildJsx(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("content-type", "text/javascript")
-	b, err := esbuild.BuildFile(m.jsxPath(r))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = w.Write(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func (m *Middleware) handleClientModule(w http.ResponseWriter, r *http.Request) {
+func (m *Handler) handleClientModule(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "text/javascript")
 	io.WriteString(w, ClientModule)
 }
 
-func (m *Middleware) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
+func (m *Handler) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.New("proxy").Parse(ModuleProxyTmpl))
 
-	filepath := path.Join(m.Fileroot, r.URL.Path)
-	if m.jsxExists(r) {
-		filepath += "x"
+	filepath := path.Join(m.ServeRoot, r.URL.Path)
+	src, err := afero.ReadFile(m.Fs, filepath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		debug(err)
+		return
 	}
 
-	exports, err := jsexports.Exports(filepath)
+	exports, err := jsexports.Exports(src)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		debug(err)
@@ -167,7 +168,7 @@ func (m *Middleware) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (m *Middleware) handleWebSocket(conn *websocket.Conn) {
+func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 	defer conn.Close()
 	ch := make(chan string)
 	m.clients.Store(ch, struct{}{})
@@ -175,7 +176,7 @@ func (m *Middleware) handleWebSocket(conn *websocket.Conn) {
 
 	for path := range ch {
 		err := conn.WriteJSON(map[string]interface{}{
-			"path": strings.TrimPrefix(path, m.Fileroot),
+			"path": strings.TrimPrefix(path, m.ServeRoot),
 		})
 		if err != nil {
 			m.clients.Delete(ch)
@@ -187,7 +188,10 @@ func (m *Middleware) handleWebSocket(conn *websocket.Conn) {
 	}
 }
 
-func (m *Middleware) Watch() error {
+func (m *Handler) Watch() error {
+	if m.Watcher == nil {
+		return fmt.Errorf("unable to watch non-real filesystem")
+	}
 	go func() {
 		for {
 			select {
@@ -206,9 +210,9 @@ func (m *Middleware) Watch() error {
 	return m.Watcher.Start(m.WatchInterval)
 }
 
-func (m *Middleware) jsxPath(r *http.Request) string {
-	return filepath.Clean(filepath.Join(m.Fileroot, r.URL.Path)) + "x" // TODO: dont cheat
-}
+// func (m *Handler) jsxPath(r *http.Request) string {
+// 	return filepath.Clean(filepath.Join(m.Fileroot, r.URL.Path)) + "x" // TODO: dont cheat
+// }
 
 func isJavaScript(r *http.Request) bool {
 	return contains([]string{".mjs", ".js", ".jsx"}, path.Ext(r.URL.Path))

@@ -2,7 +2,6 @@ package jsexports
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -299,12 +298,8 @@ func isAlphaNumeric(r rune) bool {
 	return false
 }
 
-func Exports(path string) ([]string, error) {
-	buf, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	l := lex("", string(buf))
+func Exports(src []byte) ([]string, error) {
+	l := lex("", string(src))
 	i := l.nextItem()
 	var exports []string
 	for i.typ != itemEOF {

@@ -8,4 +8,5 @@ require (
 	github.com/progrium/esbuild v0.0.0-20200327212623-fae14fb26173
 	github.com/radovskyb/watcher v1.0.7
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
+	github.com/spf13/afero v1.2.2
 )

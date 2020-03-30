@@ -2,6 +2,7 @@ package esbuild
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/progrium/esbuild/pkg/ast"
@@ -10,9 +11,10 @@ import (
 	"github.com/progrium/esbuild/pkg/logging"
 	"github.com/progrium/esbuild/pkg/parser"
 	"github.com/progrium/esbuild/pkg/resolver"
+	"github.com/spf13/afero"
 )
 
-func BuildFile(filepath string) ([]byte, error) {
+func BuildFile(fs afero.Fs, filepath string) ([]byte, error) {
 	parseOptions := parser.ParseOptions{
 		Defines: make(map[string]ast.E),
 		JSX: parser.JSXOptions{
@@ -26,12 +28,11 @@ func BuildFile(filepath string) ([]byte, error) {
 		ExitWhenLimitIsHit: true,
 	}
 
-	fs := fs.RealFS()
-	resolver := resolver.NewResolver(fs, []string{".jsx", ".js", ".mjs"})
+	wrapfs := &FS{fs}
+	resolver := resolver.NewResolver(wrapfs, []string{".jsx", ".js", ".mjs"})
 	logger, _ := logging.NewStderrLog(logOptions)
-	bundle := bundler.ScanBundle(logger, fs, resolver, []string{filepath}, parseOptions)
+	bundle := bundler.ScanBundle(logger, wrapfs, resolver, []string{filepath}, parseOptions)
 	result := bundle.Compile(logger, bundleOptions)
-	//log.Println(filepath, result)
 
 	for _, item := range result {
 		if strings.Contains(item.JsAbsPath+"x", filepath) {
@@ -39,4 +40,45 @@ func BuildFile(filepath string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("no result from esbuild")
+}
+
+type FS struct {
+	afero.Fs
+}
+
+func (f *FS) ReadDirectory(path string) map[string]fs.Entry {
+	dir, err := afero.ReadDir(f, path)
+	if err != nil {
+		return map[string]fs.Entry{}
+	}
+	m := make(map[string]fs.Entry)
+	for _, fi := range dir {
+		if fi.IsDir() {
+			m[fi.Name()] = fs.DirEntry
+		} else {
+			m[fi.Name()] = fs.FileEntry
+		}
+	}
+	return m
+}
+
+func (f *FS) ReadFile(path string) (string, bool) {
+	buffer, err := afero.ReadFile(f, path)
+	return string(buffer), err == nil
+}
+
+func (f *FS) Dir(path string) string {
+	return filepath.Dir(path)
+}
+
+func (f *FS) Base(path string) string {
+	return filepath.Base(path)
+}
+
+func (f *FS) Join(parts ...string) string {
+	return filepath.Clean(filepath.Join(parts...))
+}
+
+func (f *FS) RelativeToCwd(path string) (string, bool) {
+	return path, true
 }

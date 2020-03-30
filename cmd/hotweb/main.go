@@ -5,11 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gorilla/handlers"
 	"github.com/progrium/hotweb/pkg/hotweb"
 	"github.com/skratchdot/open-golang/open"
+	"github.com/spf13/afero"
 )
 
 var (
@@ -35,7 +37,8 @@ func main() {
 		}
 	}
 
-	hw := hotweb.New(Dir, nil)
+	fs := afero.NewOsFs()
+	hw := hotweb.New(fs, filepath.Clean(Dir))
 	hw.IgnoreDirs = strings.Split(Ignore, ",")
 
 	go func() {
