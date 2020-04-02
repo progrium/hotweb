@@ -1,7 +1,6 @@
 package hotweb
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -33,7 +32,7 @@ func debug(args ...interface{}) {
 }
 
 type Handler struct {
-	Fs            afero.Fs
+	Fs            *makefs.Fs
 	ServeRoot     string
 	IgnoreDirs    []string
 	WatchInterval time.Duration
@@ -172,7 +171,7 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 	defer conn.Close()
 	ch := make(chan string)
 	m.clients.Store(ch, struct{}{})
-	debug("new hotweb connection")
+	//debug("new hotweb connection")
 
 	for path := range ch {
 		err := conn.WriteJSON(map[string]interface{}{
@@ -189,8 +188,9 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 }
 
 func (m *Handler) Watch() error {
-	if m.Watcher == nil {
-		return fmt.Errorf("unable to watch non-real filesystem")
+	if !m.Fs.Real() {
+		debug("hotweb: unable to watch non-real filesystem")
+		return nil
 	}
 	go func() {
 		for {

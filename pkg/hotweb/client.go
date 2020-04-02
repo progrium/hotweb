@@ -7,7 +7,7 @@ let ws = undefined;
  
 (function connect() {
     ws = new WebSocket(import.meta.url.replace("http", "ws"));
-    ws.onopen = () => console.debug("hotweb websocket open");
+    //ws.onopen = () => console.debug("hotweb websocket open");
     ws.onclose = () => console.debug("hotweb websocket closed");
     ws.onerror = (err) => console.debug("hotweb websocket error: ", err);
     ws.onmessage = async (event) => {
