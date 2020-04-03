@@ -1,9 +1,11 @@
 package hotweb
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -28,7 +30,9 @@ var (
 )
 
 func debug(args ...interface{}) {
-	log.Println(args...)
+	if os.Getenv("HOTWEB_DEBUG") != "" {
+		log.Println(append([]interface{}{"hotweb:"}, args...)...)
+	}
 }
 
 type Handler struct {
@@ -63,6 +67,7 @@ func New(fs afero.Fs, serveRoot string) *Handler {
 	}
 
 	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) ([]byte, error) {
+		debug("building", dst)
 		return esbuild.BuildFile(fs, src)
 	})
 
@@ -120,7 +125,11 @@ func (m *Handler) isIgnored(r *http.Request) bool {
 
 func (m *Handler) handleClientModule(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "text/javascript")
-	io.WriteString(w, ClientModule)
+	debug := "false"
+	if os.Getenv("HOTWEB_DEBUG") != "" {
+		debug = "true"
+	}
+	io.WriteString(w, fmt.Sprintf(ClientModule, debug))
 }
 
 func (m *Handler) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +163,7 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 	defer conn.Close()
 	ch := make(chan string)
 	m.clients.Store(ch, struct{}{})
-	//debug("new hotweb connection")
+	debug("new websocket connection")
 
 	for path := range ch {
 		err := conn.WriteJSON(map[string]interface{}{
@@ -163,7 +172,7 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 		if err != nil {
 			m.clients.Delete(ch)
 			if !strings.Contains(err.Error(), "broken pipe") {
-				debug("hotweb error:", err)
+				debug(err)
 			}
 			return
 		}
@@ -172,13 +181,13 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 
 func (m *Handler) Watch() error {
 	if m.Watcher == nil {
-		debug("hotweb: no watcher to watch filesystem")
-		return nil
+		return fmt.Errorf("hotweb: no watcher to watch filesystem")
 	}
 	go func() {
 		for {
 			select {
 			case event := <-m.Watcher.Event:
+				debug("detected change", event.Path)
 				m.clients.Range(func(k, v interface{}) bool {
 					k.(chan string) <- event.Path
 					return true
@@ -192,10 +201,6 @@ func (m *Handler) Watch() error {
 	}()
 	return m.Watcher.Start(m.WatchInterval)
 }
-
-// func (m *Handler) jsxPath(r *http.Request) string {
-// 	return filepath.Clean(filepath.Join(m.Fileroot, r.URL.Path)) + "x" // TODO: dont cheat
-// }
 
 func isJavaScript(r *http.Request) bool {
 	return contains([]string{".mjs", ".js", ".jsx"}, path.Ext(r.URL.Path))

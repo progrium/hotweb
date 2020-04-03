@@ -4,14 +4,20 @@ var ClientModule = `
 let listeners = {};
 let refreshers = [];
 let ws = undefined;
+let debug = %s;
  
 (function connect() {
     ws = new WebSocket(import.meta.url.replace("http", "ws"));
-    //ws.onopen = () => console.debug("hotweb websocket open");
-    ws.onclose = () => console.debug("hotweb websocket closed");
+    if (debug) {
+        ws.onopen = () => console.debug("hotweb websocket open");
+        ws.onclose = () => console.debug("hotweb websocket closed");
+    }
     ws.onerror = (err) => console.debug("hotweb websocket error: ", err);
     ws.onmessage = async (event) => {
         let msg = JSON.parse(event.data);
+        if (debug) {
+            console.debug("hotweb trigger:", msg.path);
+        }
         let paths = Object.keys(listeners);
         paths.sort((a, b) => b.length - a.length);
         for (const idx in paths) {
