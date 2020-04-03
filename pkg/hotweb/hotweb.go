@@ -14,7 +14,7 @@ import (
 	"github.com/progrium/hotweb/pkg/esbuild"
 	"github.com/progrium/hotweb/pkg/jsexports"
 	"github.com/progrium/hotweb/pkg/makefs"
-	"github.com/radovskyb/watcher"
+	"github.com/progrium/watcher"
 	"github.com/spf13/afero"
 )
 
@@ -43,24 +43,23 @@ type Handler struct {
 	clients sync.Map
 }
 
-func newWriteWatcher(filepath string) (*watcher.Watcher, error) {
+func newWriteWatcher(fs afero.Fs, root string) (*watcher.Watcher, error) {
 	w := watcher.New()
+	w.SetFileSystem(fs)
 	w.SetMaxEvents(1)
 	w.FilterOps(watcher.Write)
-	return w, w.AddRecursive(filepath)
+	return w, w.AddRecursive(root)
 }
 
-func New(fs afero.Fs, serveRoot string, watch bool) *Handler {
+func New(fs afero.Fs, serveRoot string) *Handler {
 	cache := afero.NewMemMapFs()
 	mfs := makefs.New(fs, cache)
 
 	var watcher *watcher.Watcher
 	var err error
-	if watch {
-		watcher, err = newWriteWatcher(serveRoot)
-		if err != nil {
-			panic(err)
-		}
+	watcher, err = newWriteWatcher(fs, serveRoot)
+	if err != nil {
+		panic(err)
 	}
 
 	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) error {
@@ -189,7 +188,7 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 
 func (m *Handler) Watch() error {
 	if m.Watcher == nil {
-		debug("hotweb: unable to watch filesystem")
+		debug("hotweb: no watcher to watch filesystem")
 		return nil
 	}
 	go func() {
