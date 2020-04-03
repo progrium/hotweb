@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/afero"
+	"github.com/spf13/afero/mem"
 )
 
 type Fs struct {
@@ -18,7 +19,7 @@ type transform struct {
 	fn     transformFn
 }
 
-type transformFn func(fs afero.Fs, dst, src string) error
+type transformFn func(fs afero.Fs, dst, src string) ([]byte, error)
 
 func New(readFs, writeFs afero.Fs) *Fs {
 	return &Fs{
@@ -37,10 +38,10 @@ func (f *Fs) Register(dstExt, srcExt string, fn transformFn) {
 	})
 }
 
-func (f *Fs) ensureTransforms(name string) {
+func (f *Fs) ensureTransforms(name string) afero.File {
 	transforms, ok := f.transforms[path.Ext(name)]
 	if !ok {
-		return
+		return nil
 	}
 	for _, transform := range transforms {
 		srcFile := strings.ReplaceAll(name, path.Ext(name), transform.srcExt)
@@ -49,25 +50,39 @@ func (f *Fs) ensureTransforms(name string) {
 			panic(err)
 		}
 		if srcExists {
-			if err := transform.fn(f.Fs, name, srcFile); err != nil {
+			b, err := transform.fn(f.Fs, name, srcFile)
+			if err != nil {
 				panic(err)
 			}
-			return
+			f := mem.NewFileHandle(mem.CreateFile(name))
+			_, err = f.Write(b)
+			if err != nil {
+				panic(err)
+			}
+			f.Seek(0, 0)
+			return f
 		}
 	}
+	return nil
 }
 
 func (f *Fs) Open(name string) (afero.File, error) {
-	f.ensureTransforms(name)
+	if tf := f.ensureTransforms(name); tf != nil {
+		return tf, nil
+	}
 	return f.Fs.Open(name)
 }
 
 func (f *Fs) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
-	f.ensureTransforms(name)
+	if tf := f.ensureTransforms(name); tf != nil {
+		return tf, nil
+	}
 	return f.Fs.OpenFile(name, flag, perm)
 }
 
 func (f *Fs) Stat(name string) (os.FileInfo, error) {
-	f.ensureTransforms(name)
+	if tf := f.ensureTransforms(name); tf != nil {
+		return tf.Stat()
+	}
 	return f.Fs.Stat(name)
 }

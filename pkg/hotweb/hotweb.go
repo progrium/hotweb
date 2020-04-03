@@ -62,12 +62,8 @@ func New(fs afero.Fs, serveRoot string) *Handler {
 		panic(err)
 	}
 
-	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) error {
-		b, err := esbuild.BuildFile(fs, src)
-		if err != nil {
-			return err
-		}
-		return afero.WriteFile(fs, dst, b, 0644)
+	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) ([]byte, error) {
+		return esbuild.BuildFile(fs, src)
 	})
 
 	return &Handler{
@@ -99,11 +95,6 @@ func (m *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// if m.isValidJS(r) && m.jsxExists(r) && r.URL.RawQuery != "" {
-	// 	m.handleBuildJsx(w, r)
-	// 	return
-	// }
-
 	if m.isValidJS(r) && r.URL.RawQuery == "" {
 		m.handleModuleProxy(w, r)
 		return
@@ -113,13 +104,6 @@ func (m *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fileserver := http.FileServer(httpFs.Dir(m.ServeRoot))
 	fileserver.ServeHTTP(w, r)
 }
-
-// func (m *Handler) jsxExists(r *http.Request) bool {
-// 	if _, err := os.Stat(m.jsxPath(r)); os.IsNotExist(err) {
-// 		return false
-// 	}
-// 	return true
-// }
 
 func (m *Handler) isValidJS(r *http.Request) bool {
 	return !m.isIgnored(r) && isJavaScript(r) && !underscoreFilePrefix(r)

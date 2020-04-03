@@ -20,12 +20,8 @@ func TestMakefs(t *testing.T) {
 		t.Fatal(err)
 	}
 	mfs := New(f, f)
-	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) error {
-		b, err := esbuild.BuildFile(fs, src)
-		if err != nil {
-			return err
-		}
-		return afero.WriteFile(fs, dst, b, 0644)
+	mfs.Register(".js", ".jsx", func(fs afero.Fs, dst, src string) ([]byte, error) {
+		return esbuild.BuildFile(fs, src)
 	})
 
 	t.Run("made file", func(t *testing.T) {
