@@ -10,9 +10,7 @@ import (
 
 type Fs struct {
 	afero.Fs
-
 	transforms map[string][]transform
-	os         bool
 }
 
 type transform struct {
@@ -23,19 +21,13 @@ type transform struct {
 type transformFn func(fs afero.Fs, dst, src string) error
 
 func New(readFs, writeFs afero.Fs) *Fs {
-	_, ok := readFs.(*afero.OsFs)
 	return &Fs{
 		Fs: afero.NewCopyOnWriteFs(
 			afero.NewReadOnlyFs(readFs),
 			writeFs,
 		),
 		transforms: make(map[string][]transform),
-		os:         ok,
 	}
-}
-
-func (f *Fs) Real() bool {
-	return f.os
 }
 
 func (f *Fs) Register(dstExt, srcExt string, fn transformFn) {

@@ -19,7 +19,7 @@ func TestHotweb(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hw := New(f, "/root")
+	hw := New(f, "/root", false)
 
 	t.Run("existing file, no proxy", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/exists.js?0", nil)

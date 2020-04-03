@@ -50,13 +50,13 @@ func newWriteWatcher(filepath string) (*watcher.Watcher, error) {
 	return w, w.AddRecursive(filepath)
 }
 
-func New(fs afero.Fs, serveRoot string) *Handler {
+func New(fs afero.Fs, serveRoot string, watch bool) *Handler {
 	cache := afero.NewMemMapFs()
 	mfs := makefs.New(fs, cache)
 
 	var watcher *watcher.Watcher
 	var err error
-	if mfs.Real() {
+	if watch {
 		watcher, err = newWriteWatcher(serveRoot)
 		if err != nil {
 			panic(err)
@@ -188,8 +188,8 @@ func (m *Handler) handleWebSocket(conn *websocket.Conn) {
 }
 
 func (m *Handler) Watch() error {
-	if !m.Fs.Real() {
-		debug("hotweb: unable to watch non-real filesystem")
+	if m.Watcher == nil {
+		debug("hotweb: unable to watch filesystem")
 		return nil
 	}
 	go func() {

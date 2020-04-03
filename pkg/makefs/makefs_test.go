@@ -28,18 +28,6 @@ func TestMakefs(t *testing.T) {
 		return afero.WriteFile(fs, dst, b, 0644)
 	})
 
-	if mfs.Real() {
-		t.Errorf("got real fs, want non-real (not afero.OsFs)")
-	}
-
-	t.Run("real fs", func(t *testing.T) {
-		osfs := afero.NewOsFs()
-		rmfs := New(osfs, osfs)
-		if !rmfs.Real() {
-			t.Errorf("got non-real fs, want fs based on afero.OsFs")
-		}
-	})
-
 	t.Run("made file", func(t *testing.T) {
 		got, err := afero.ReadFile(mfs, "html.js")
 		if err != nil {
