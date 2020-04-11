@@ -92,8 +92,9 @@ func (m *Handler) MatchHTTP(r *http.Request) bool {
 	if strings.HasPrefix(r.URL.Path, path.Join(m.Prefix, InternalPath)) {
 		return true
 	}
-	if strings.HasPrefix(r.URL.Path, m.Prefix+"/") {
-		if ok, _ := afero.Exists(m.Fs, strings.TrimPrefix(r.URL.Path, m.Prefix)); ok {
+	if strings.HasPrefix(r.URL.Path, m.Prefix) {
+		fsPath := path.Join(m.ServeRoot, strings.TrimPrefix(r.URL.Path, m.Prefix))
+		if ok, _ := afero.Exists(m.Fs, fsPath); ok {
 			return true
 		}
 	}

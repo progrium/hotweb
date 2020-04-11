@@ -12,6 +12,9 @@ func TestHotweb(t *testing.T) {
 	existFile := []byte("foo")
 	srcFile := []byte("<html></html>\n")
 	f := afero.NewMemMapFs()
+	if err := afero.WriteFile(f, "/root/sub/exists", existFile, 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := afero.WriteFile(f, "/root/exists.js", existFile, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -21,6 +24,25 @@ func TestHotweb(t *testing.T) {
 
 	hw := New(f, "/root", "")
 
+	t.Run("existing file in subdir, no proxy", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/sub/exists", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		match := hw.MatchHTTP(req)
+		if !match {
+			t.Fatal("no match")
+		}
+
+		hw.ServeHTTP(rr, req)
+		expected := string(existFile)
+		if rr.Body.String() != expected {
+			t.Errorf("got %v want %v", rr.Body.String(), expected)
+		}
+	})
+
 	t.Run("existing file, no proxy", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/exists.js?0", nil)
 		if err != nil {
@@ -28,6 +50,11 @@ func TestHotweb(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
+		match := hw.MatchHTTP(req)
+		if !match {
+			t.Fatal("no match")
+		}
+
 		hw.ServeHTTP(rr, req)
 
 		expected := string(existFile)
@@ -43,8 +70,12 @@ func TestHotweb(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		hw.ServeHTTP(rr, req)
+		match := hw.MatchHTTP(req)
+		if !match {
+			t.Fatal("no match")
+		}
 
+		hw.ServeHTTP(rr, req)
 		expected := "m(\"html\", null);\n"
 		if rr.Body.String() != expected {
 			t.Errorf("got %v want %v", rr.Body.String(), expected)
@@ -60,8 +91,12 @@ func TestHotweb(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		hwp.ServeHTTP(rr, req)
+		match := hwp.MatchHTTP(req)
+		if !match {
+			t.Fatal("no match")
+		}
 
+		hwp.ServeHTTP(rr, req)
 		expected := string(existFile)
 		if rr.Body.String() != expected {
 			t.Errorf("got %v want %v", rr.Body.String(), expected)
@@ -75,9 +110,32 @@ func TestHotweb(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		hwp.ServeHTTP(rr, req)
+		match := hwp.MatchHTTP(req)
+		if !match {
+			t.Fatal("no match")
+		}
 
+		hwp.ServeHTTP(rr, req)
 		expected := "m(\"html\", null);\n"
+		if rr.Body.String() != expected {
+			t.Errorf("got %v want %v", rr.Body.String(), expected)
+		}
+	})
+
+	t.Run("existing file in subdir, no proxy, prefixed", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/prefix/sub/exists", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		match := hwp.MatchHTTP(req)
+		if !match {
+			t.Fatal("no match")
+		}
+
+		hwp.ServeHTTP(rr, req)
+		expected := string(existFile)
 		if rr.Body.String() != expected {
 			t.Errorf("got %v want %v", rr.Body.String(), expected)
 		}
