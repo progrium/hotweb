@@ -2,7 +2,6 @@ package hotweb
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -25,8 +24,8 @@ const (
 )
 
 var (
-	ReloadExport     = "noHMR"
-	ClientModuleName = "_hotweb.mjs"
+	InternalPath = "/.hotweb"
+	ReloadExport = "noHMR"
 )
 
 func debug(args ...interface{}) {
@@ -38,13 +37,15 @@ func debug(args ...interface{}) {
 type Handler struct {
 	Fs            *makefs.Fs
 	ServeRoot     string
+	Prefix        string
 	IgnoreDirs    []string
 	WatchInterval time.Duration
 
 	Upgrader websocket.Upgrader
 	Watcher  *watcher.Watcher
 
-	clients sync.Map
+	fileserver http.Handler
+	clients    sync.Map
 }
 
 func newWriteWatcher(fs afero.Fs, root string) (*watcher.Watcher, error) {
@@ -55,7 +56,7 @@ func newWriteWatcher(fs afero.Fs, root string) (*watcher.Watcher, error) {
 	return w, w.AddRecursive(root)
 }
 
-func New(fs afero.Fs, serveRoot string) *Handler {
+func New(fs afero.Fs, serveRoot, prefix string) *Handler {
 	cache := afero.NewMemMapFs()
 	mfs := makefs.New(fs, cache)
 
@@ -71,47 +72,48 @@ func New(fs afero.Fs, serveRoot string) *Handler {
 		return esbuild.BuildFile(fs, src)
 	})
 
+	httpFs := afero.NewHttpFs(mfs).Dir(serveRoot)
+	prefix = path.Join("/", prefix)
 	return &Handler{
 		Fs:        mfs,
 		ServeRoot: serveRoot,
+		Prefix:    prefix,
 		Upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
 		Watcher:       watcher,
 		WatchInterval: DefaultWatchInterval,
+		fileserver:    http.StripPrefix(prefix, http.FileServer(httpFs)),
 	}
+}
+
+func (m *Handler) MatchHTTP(r *http.Request) bool {
+	if strings.HasPrefix(r.URL.Path, path.Join(m.Prefix, InternalPath)) {
+		return true
+	}
+	if strings.HasPrefix(r.URL.Path, m.Prefix+"/") {
+		if ok, _ := afero.Exists(m.Fs, strings.TrimPrefix(r.URL.Path, m.Prefix)); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// TODO: some way to make sure this is hotweb websocket
-	if websocket.IsWebSocketUpgrade(r) {
-		conn, err := m.Upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		m.handleWebSocket(conn)
-		return
+	mux := http.NewServeMux()
+	mux.HandleFunc(path.Join(m.Prefix, InternalPath, ClientFilename), m.handleClientModule)
+	mux.HandleFunc(path.Join(m.Prefix, InternalPath), m.handleWebSocket)
+	if len(m.Prefix) > 1 {
+		mux.HandleFunc(m.Prefix+"/", m.handleFileProxy)
+	} else {
+		mux.HandleFunc(m.Prefix, m.handleFileProxy)
 	}
-
-	if path.Base(r.URL.Path) == ClientModuleName {
-		m.handleClientModule(w, r)
-		return
-	}
-
-	if m.isValidJS(r) && r.URL.RawQuery == "" {
-		m.handleModuleProxy(w, r)
-		return
-	}
-
-	httpFs := afero.NewHttpFs(m.Fs)
-	fileserver := http.FileServer(httpFs.Dir(m.ServeRoot))
-	fileserver.ServeHTTP(w, r)
+	mux.ServeHTTP(w, r)
 }
 
 func (m *Handler) isValidJS(r *http.Request) bool {
-	return !m.isIgnored(r) && isJavaScript(r) && !underscoreFilePrefix(r)
+	return !m.isIgnored(r) && isJavaScript(r) && !hiddenFilePrefix(r)
 }
 
 func (m *Handler) isIgnored(r *http.Request) bool {
@@ -123,13 +125,22 @@ func (m *Handler) isIgnored(r *http.Request) bool {
 	return false
 }
 
-func (m *Handler) handleClientModule(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("content-type", "text/javascript")
-	debug := "false"
-	if os.Getenv("HOTWEB_DEBUG") != "" {
-		debug = "true"
+func (m *Handler) handleFileProxy(w http.ResponseWriter, r *http.Request) {
+	if m.isValidJS(r) && r.URL.RawQuery == "" {
+		m.handleModuleProxy(w, r)
+		return
 	}
-	io.WriteString(w, fmt.Sprintf(ClientModule, debug))
+	m.fileserver.ServeHTTP(w, r)
+}
+
+func (m *Handler) handleClientModule(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.New("client").Parse(ClientSourceTmpl))
+
+	w.Header().Set("content-type", "text/javascript")
+	tmpl.Execute(w, map[string]interface{}{
+		"Debug":    os.Getenv("HOTWEB_DEBUG") != "",
+		"Endpoint": fmt.Sprintf("ws://%s%s", r.Host, path.Dir(r.URL.Path)),
+	})
 }
 
 func (m *Handler) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
@@ -155,11 +166,16 @@ func (m *Handler) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
 		"Path":       r.URL.Path,
 		"Exports":    exports,
 		"Reload":     contains(exports, ReloadExport),
-		"ClientPath": ClientModuleName,
+		"ClientPath": path.Join(m.Prefix, InternalPath, ClientFilename),
 	})
 }
 
-func (m *Handler) handleWebSocket(conn *websocket.Conn) {
+func (m *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := m.Upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	defer conn.Close()
 	ch := make(chan string)
 	m.clients.Store(ch, struct{}{})
@@ -206,8 +222,8 @@ func isJavaScript(r *http.Request) bool {
 	return contains([]string{".mjs", ".js", ".jsx"}, path.Ext(r.URL.Path))
 }
 
-func underscoreFilePrefix(r *http.Request) bool {
-	return path.Base(r.URL.Path)[0] == '_'
+func hiddenFilePrefix(r *http.Request) bool {
+	return path.Base(r.URL.Path)[0] == '_' || path.Base(r.URL.Path)[0] == '.'
 }
 
 func contains(s []string, e string) bool {

@@ -1,13 +1,15 @@
 package hotweb
 
-var ClientModule = `
+var ClientFilename = "client.mjs"
+var ClientSourceTmpl = `
 let listeners = {};
 let refreshers = [];
 let ws = undefined;
-let debug = %s;
+let debug = {{if .Debug}}true{{else}}false{{end}};
+
  
 (function connect() {
-    ws = new WebSocket(import.meta.url.replace("http", "ws"));
+    ws = new WebSocket("{{.Endpoint}}");
     if (debug) {
         ws.onopen = () => console.debug("hotweb websocket open");
         ws.onclose = () => console.debug("hotweb websocket closed");

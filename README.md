@@ -29,7 +29,7 @@ the page.
 ### Setting up the hotweb JS client
 Add this line to your main Javascript module:
 ```javascript
-import * as hotweb from '/_hotweb.mjs';
+import * as hotweb from '/.hotweb/client.mjs';
 ```
 Now any JavaScript loaded will be reloaded when their files are changed.
 There is a callback for when a reload occurs so you can trigger whatever needs

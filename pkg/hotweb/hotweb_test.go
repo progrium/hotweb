@@ -19,7 +19,7 @@ func TestHotweb(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hw := New(f, "/root")
+	hw := New(f, "/root", "")
 
 	t.Run("existing file, no proxy", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/exists.js?0", nil)
@@ -44,6 +44,38 @@ func TestHotweb(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 		hw.ServeHTTP(rr, req)
+
+		expected := "m(\"html\", null);\n"
+		if rr.Body.String() != expected {
+			t.Errorf("got %v want %v", rr.Body.String(), expected)
+		}
+	})
+
+	hwp := New(f, "/root", "/prefix")
+
+	t.Run("existing file, no proxy, prefixed", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/prefix/exists.js?0", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		hwp.ServeHTTP(rr, req)
+
+		expected := string(existFile)
+		if rr.Body.String() != expected {
+			t.Errorf("got %v want %v", rr.Body.String(), expected)
+		}
+	})
+
+	t.Run("made file, no proxy, prefixed", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/prefix/html.js?0", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rr := httptest.NewRecorder()
+		hwp.ServeHTTP(rr, req)
 
 		expected := "m(\"html\", null);\n"
 		if rr.Body.String() != expected {

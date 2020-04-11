@@ -1,6 +1,6 @@
 package hotweb
 
-var ModuleProxyTmpl = `import * as hotweb from '/{{.ClientPath}}';
+var ModuleProxyTmpl = `import * as hotweb from '{{.ClientPath}}';
 import * as mod from '{{.Path}}?0';
 
 {{range .Exports}}let {{.}}Proxy = mod.{{.}};
