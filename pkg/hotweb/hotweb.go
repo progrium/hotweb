@@ -147,8 +147,8 @@ func (m *Handler) handleClientModule(w http.ResponseWriter, r *http.Request) {
 func (m *Handler) handleModuleProxy(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.New("proxy").Parse(ModuleProxyTmpl))
 
-	filepath := path.Join(m.ServeRoot, r.URL.Path)
-	src, err := afero.ReadFile(m.Fs, filepath)
+	fsPath := path.Join(m.ServeRoot, strings.TrimPrefix(r.URL.Path, m.Prefix))
+	src, err := afero.ReadFile(m.Fs, fsPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		debug(err)
