@@ -182,9 +182,9 @@ func (m *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	m.clients.Store(ch, struct{}{})
 	debug("new websocket connection")
 
-	for path := range ch {
+	for filepath := range ch {
 		err := conn.WriteJSON(map[string]interface{}{
-			"path": strings.TrimPrefix(path, m.ServeRoot),
+			"path": path.Join(m.Prefix, strings.TrimPrefix(filepath, m.ServeRoot)),
 		})
 		if err != nil {
 			m.clients.Delete(ch)
