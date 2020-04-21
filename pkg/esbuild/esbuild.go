@@ -2,6 +2,7 @@ package esbuild
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -30,8 +31,12 @@ func BuildFile(fs afero.Fs, filepath string) ([]byte, error) {
 
 	wrapfs := &FS{fs}
 	resolver := resolver.NewResolver(wrapfs, []string{".jsx", ".js", ".mjs"})
-	logger, _ := logging.NewStderrLog(logOptions)
+	logger, join := logging.NewStderrLog(logOptions)
 	bundle := bundler.ScanBundle(logger, wrapfs, resolver, []string{filepath}, parseOptions)
+	if join().Errors != 0 {
+		log.Println("[WARNING] ScanBundle failed")
+		return nil, nil
+	}
 	result := bundle.Compile(logger, bundleOptions)
 
 	for _, item := range result {
