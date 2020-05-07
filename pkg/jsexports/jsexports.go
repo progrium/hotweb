@@ -301,12 +301,16 @@ func isAlphaNumeric(r rune) bool {
 func Exports(src []byte) ([]string, error) {
 	l := lex("", string(src))
 	i := l.nextItem()
-	var exports []string
+	set := make(map[string]struct{})
 	for i.typ != itemEOF {
 		if i.typ == itemIdentifier {
-			exports = append(exports, strings.Trim(i.val, "{}()-_;,.$"))
+			set[strings.Trim(i.val, "{}()-_;,.$")] = struct{}{}
 		}
 		i = l.nextItem()
+	}
+	var exports []string
+	for n, _ := range set {
+		exports = append(exports, n)
 	}
 	return exports, nil
 }
