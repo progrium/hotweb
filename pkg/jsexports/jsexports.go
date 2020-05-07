@@ -304,7 +304,7 @@ func Exports(src []byte) ([]string, error) {
 	var exports []string
 	for i.typ != itemEOF {
 		if i.typ == itemIdentifier {
-			exports = append(exports, i.val)
+			exports = append(exports, strings.Trim(i.val, "{}()-_;,.$"))
 		}
 		i = l.nextItem()
 	}
