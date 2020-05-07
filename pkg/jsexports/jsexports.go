@@ -304,7 +304,7 @@ func Exports(src []byte) ([]string, error) {
 	set := make(map[string]struct{})
 	for i.typ != itemEOF {
 		if i.typ == itemIdentifier {
-			set[strings.Trim(i.val, "{}()-_;,.$")] = struct{}{}
+			set[strings.Trim(i.val, "{}()-_;,.$!")] = struct{}{}
 		}
 		i = l.nextItem()
 	}
