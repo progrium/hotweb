@@ -56,7 +56,42 @@ func newWriteWatcher(fs afero.Fs, root string) (*watcher.Watcher, error) {
 	return w, w.AddRecursive(root)
 }
 
-func New(fs afero.Fs, serveRoot, prefix string) *Handler {
+type Config struct {
+	Filesystem    afero.Fs
+	ServeRoot     string // abs path in filesystem to serve
+	Prefix        string // optional http path prefix
+	JsxFactory    string
+	InternalPath  string
+	ReloadExport  string
+	WatchInterval time.Duration
+	IgnoreDirs    []string
+}
+
+func New(cfg Config) *Handler {
+	if cfg.WatchInterval == 0 {
+		cfg.WatchInterval = DefaultWatchInterval
+	}
+	if cfg.Filesystem == nil {
+		cfg.Filesystem = afero.NewOsFs()
+	}
+	if cfg.ServeRoot == "" {
+		cfg.ServeRoot = "/"
+	}
+
+	// TODO: short term config setup, refactor
+	fs := cfg.Filesystem
+	serveRoot := cfg.ServeRoot
+	prefix := cfg.Prefix
+	if cfg.JsxFactory != "" {
+		esbuild.JsxFactory = cfg.JsxFactory
+	}
+	if cfg.InternalPath != "" {
+		InternalPath = cfg.InternalPath
+	}
+	if cfg.ReloadExport != "" {
+		ReloadExport = cfg.ReloadExport
+	}
+
 	cache := afero.NewMemMapFs()
 	mfs := makefs.New(fs, cache)
 
@@ -75,15 +110,16 @@ func New(fs afero.Fs, serveRoot, prefix string) *Handler {
 	httpFs := afero.NewHttpFs(mfs).Dir(serveRoot)
 	prefix = path.Join("/", prefix)
 	return &Handler{
-		Fs:        mfs,
-		ServeRoot: serveRoot,
-		Prefix:    prefix,
+		Fs:         mfs,
+		ServeRoot:  serveRoot,
+		Prefix:     prefix,
+		IgnoreDirs: cfg.IgnoreDirs,
 		Upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
 		Watcher:       watcher,
-		WatchInterval: DefaultWatchInterval,
+		WatchInterval: cfg.WatchInterval,
 		fileserver:    http.StripPrefix(prefix, http.FileServer(httpFs)),
 	}
 }

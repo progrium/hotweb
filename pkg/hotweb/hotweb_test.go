@@ -22,7 +22,10 @@ func TestHotweb(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hw := New(f, "/root", "")
+	hw := New(Config{
+		Filesystem: f,
+		ServeRoot:  "/root",
+	})
 
 	t.Run("existing file in subdir, no proxy", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/sub/exists", nil)
@@ -82,7 +85,11 @@ func TestHotweb(t *testing.T) {
 		}
 	})
 
-	hwp := New(f, "/root", "/prefix")
+	hwp := New(Config{
+		Filesystem: f,
+		ServeRoot:  "/root",
+		Prefix:     "/prefix",
+	})
 
 	t.Run("existing file, no proxy, prefixed", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/prefix/exists.js?0", nil)

@@ -3,6 +3,7 @@ package esbuild
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,11 +16,20 @@ import (
 	"github.com/spf13/afero"
 )
 
+var JsxFactory = "m"
+
+func jsxFactory() string {
+	if os.Getenv("JSX_FACTORY") != "" {
+		return os.Getenv("JSX_FACTORY")
+	}
+	return JsxFactory
+}
+
 func BuildFile(fs afero.Fs, filepath string) ([]byte, error) {
 	parseOptions := parser.ParseOptions{
 		Defines: make(map[string]ast.E),
 		JSX: parser.JSXOptions{
-			Factory: []string{"m"},
+			Factory: []string{jsxFactory()},
 		},
 	}
 	bundleOptions := bundler.BundleOptions{}
