@@ -46,6 +46,8 @@ type Handler struct {
 
 	fileserver http.Handler
 	clients    sync.Map
+	mux        http.Handler
+	muxOnce    sync.Once
 }
 
 func newWriteWatcher(fs afero.Fs, root string) (*watcher.Watcher, error) {
@@ -138,6 +140,11 @@ func (m *Handler) MatchHTTP(r *http.Request) bool {
 }
 
 func (m *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.muxOnce.Do(m.buildMux)
+	m.mux.ServeHTTP(w, r)
+}
+
+func (m *Handler) buildMux() {
 	mux := http.NewServeMux()
 	mux.HandleFunc(path.Join(m.Prefix, InternalPath, ClientFilename), m.handleClientModule)
 	mux.HandleFunc(path.Join(m.Prefix, InternalPath), m.handleWebSocket)
@@ -146,7 +153,7 @@ func (m *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		mux.HandleFunc(m.Prefix, m.handleFileProxy)
 	}
-	mux.ServeHTTP(w, r)
+	m.mux = mux
 }
 
 func (m *Handler) isValidJS(r *http.Request) bool {
