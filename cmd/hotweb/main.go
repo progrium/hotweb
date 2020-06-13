@@ -38,7 +38,11 @@ func main() {
 	}
 
 	fs := afero.NewOsFs()
-	hw := hotweb.New(fs, filepath.Clean(Dir), "")
+	cfg := hotweb.Config{
+		Filesystem: fs,
+		ServeRoot:  filepath.Clean(Dir),
+	}
+	hw := hotweb.New(cfg)
 	hw.IgnoreDirs = strings.Split(Ignore, ",")
 
 	go func() {
